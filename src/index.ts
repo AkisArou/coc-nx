@@ -24,6 +24,7 @@ async function activate(context) {
   }
 
   await tsExtension.activate();
+
   if (!tsExtension.exports) {
     logCocInfo('no tsExtension.exports found');
     return;
