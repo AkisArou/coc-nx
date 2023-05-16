@@ -1,6 +1,8 @@
 # coc-nx
 
 First dirty implementation for experimentation.
+Code taken and modified from <https://github.com/nrwl/nx-console/blob/master/libs/vscode/typescript-plugin/src/lib/typescript-plugin.ts>
+Uses: @monodon/typescript-nx-imports-plugin
 
 For NOW, you have to:
 
