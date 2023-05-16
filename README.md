@@ -4,7 +4,21 @@ First dirty implementation for experimentation.
 
 For NOW, you have to:
 
-1. Include all external files of typescript plugin @monodon/typescript-nx-imports-plugin in your nx tsconfig.base.json (should be absolute paths)
+-- SETUP
+
+1. clone this repo
+2. add `sh vim.opt.runtimepath:prepend('<PATH_OF_coc-nx>')` into your nvim config
+3. Add plugin paths into your coc-settings.json:
+
+```json
+  "tsserver.pluginPaths": [
+    "<PATH_OF-coc-nx>/node_modules/@monodon/typescript-nx-imports-plugin/"
+  ]
+```
+
+-- Your Nx monorepo
+
+Include all external files for typescript plugin @monodon/typescript-nx-imports-plugin to work, in your nx tsconfig.base.json (should be absolute paths)
 
 Example:
 
@@ -28,28 +42,6 @@ Example:
 ```
 
 (Should not be needed in the future)
-
-2. Add plugin paths into coc-settings.json:
-
-```json
-  "tsserver.pluginPaths": [
-    "/home/<user>/coc-nx/node_modules/@monodon/typescript-nx-imports-plugin/"
-  ]
-```
-
-()
-
-## Install
-
-`:CocInstall coc-nx`
-
-## Keymaps
-
-`nmap <silent> <C-l> <Plug>(coc-coc-nx-keymap)`
-
-## Lists
-
-`:CocList demo_list`
 
 ## License
 
