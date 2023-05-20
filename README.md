@@ -10,7 +10,7 @@ For NOW, you have to:
 
 1. clone this repo
 2. cd into it and npm run build
-3. add `sh vim.opt.runtimepath:prepend('<PATH_OF_coc-nx>')` into your nvim config
+3. add `vim.opt.runtimepath:prepend('<PATH_OF_coc-nx>')` into your nvim config
 4. Add plugin paths into your coc-settings.json:
 
 ```json
