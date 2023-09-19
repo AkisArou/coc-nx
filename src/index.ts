@@ -2,6 +2,7 @@ import { extensions, workspace } from 'coc.nvim';
 import path, { dirname, join } from 'path';
 import { stat, readFile } from 'fs/promises';
 import { cwd } from 'process';
+import { readFileSync } from 'fs';
 
 const TSCONFIG_BASE = 'tsconfig.base.json';
 const TSCONFIG_LIB = 'tsconfig.lib.json';
@@ -9,6 +10,66 @@ const typeScriptExtensionId = 'coc-tsserver';
 
 function logCocInfo(...vals: any[]) {
   console.log(`NX-Coc: `, ...vals);
+}
+
+type ScopeTagMapping = {
+  scopeTag: string | undefined;
+  path: TSConfigPath;
+};
+
+type TSConfigPath = {
+  libName: string;
+  indexPath: string;
+};
+
+let tagMappings: ScopeTagMapping[];
+
+async function makeScopeTagMappings(workspaceRoot: string) {
+  const tsconfigBase = (await readAndCacheJsonFile(TSCONFIG_BASE, workspaceRoot)).json;
+
+  const paths = tsconfigBase.compilerOptions.paths;
+
+  if (!paths) {
+    logCocInfo('no paths');
+    return [];
+  }
+
+  const libPaths: TSConfigPath[] = Object.entries(paths).map(([key, indexPath]) => {
+    return {
+      libName: key,
+      indexPath: (indexPath as string[])[0] as string,
+    };
+  });
+
+  const mappings: ScopeTagMapping[] = libPaths.map((libPath) => {
+    try {
+      const projectJsonPath = libPath.indexPath.replace('src/index.ts', 'project.json');
+      const projectJson = JSON.parse(readFileSync(join(workspaceRoot, projectJsonPath), 'utf-8'));
+
+      if (!projectJson.tags) {
+        return {
+          path: libPath,
+          scopeTag: undefined,
+        };
+      }
+
+      return {
+        path: libPath,
+        scopeTag: projectJson.tags.find((t) => t.includes('scope:')),
+      };
+    } catch (error) {
+      logCocInfo(error);
+
+      return {
+        path: libPath,
+        scopeTag: undefined,
+      };
+    }
+  });
+
+  logCocInfo(mappings);
+
+  tagMappings = mappings;
 }
 
 async function activate(context) {
@@ -41,11 +102,11 @@ async function activate(context) {
 
   workspace.onDidOpenTextDocument(
     (document) => {
-      logCocInfo('onDidOpenTextDocument. document:', document);
+      // logCocInfo('onDidOpenTextDocument. document:', document);
 
       if (document.uri.endsWith('.ts') || document.uri.endsWith('.tsx')) {
-        logCocInfo('onDidOpenTextDocument. TypeScript document found', document);
-        configurePlugin(workspaceRoot, api);
+        // logCocInfo('onDidOpenTextDocument. TypeScript document found', document);
+        configurePlugin(workspaceRoot, api, document.uri);
       }
     },
     undefined,
@@ -57,15 +118,16 @@ async function activate(context) {
     () => {
       clearJsonCache(TSCONFIG_BASE, workspaceRoot);
       configurePlugin(workspaceRoot, api);
+      makeScopeTagMappings(workspaceRoot);
     },
     context.subscriptions
   );
 
   workspace.onDidChangeTextDocument(
     ({ textDocument }) => {
-      logCocInfo('onDidChangeTextDocument. textDocument', textDocument);
+      // logCocInfo('onDidChangeTextDocument. textDocument', textDocument);
       if (textDocument.uri.endsWith(TSCONFIG_BASE)) {
-        logCocInfo('onDidChangeTextDocument. textDocument as TSCONFIG_BASE', textDocument.uri);
+        // logCocInfo('onDidChangeTextDocument. textDocument as TSCONFIG_BASE', textDocument.uri);
         configurePlugin(workspaceRoot, api);
       }
     },
@@ -73,17 +135,42 @@ async function activate(context) {
     context.subscriptions
   );
 
-  configurePlugin(workspaceRoot, api);
+  // configurePlugin(workspaceRoot, api);
+  makeScopeTagMappings(workspaceRoot);
 }
 
-async function configurePlugin(workspaceRoot, api) {
+function makePath(p: string) {
+  return p.split('nable-solutions/')[1].split('src')[0] + 'src/index.ts';
+}
+
+async function configurePlugin(workspaceRoot, api, documentUri?: string) {
   // TODO
   const enableLibraryImports = true;
 
   if (enableLibraryImports) {
-    const externalFiles = await getExternalFiles(workspaceRoot);
+    let externalFiles = await getExternalFiles(workspaceRoot);
 
-    logCocInfo('External Files:', externalFiles);
+    if (documentUri && documentUri.includes('nable-solutions/packages')) {
+      const indexPath = makePath(documentUri);
+
+      const found = tagMappings.find((tm) => {
+        return tm.path.indexPath === indexPath;
+      });
+
+      if (found) {
+        externalFiles = externalFiles.filter((ef) => {
+          const foundScopeTag = tagMappings.find((tm) => makePath(ef.mainFile) === tm.path.indexPath)?.scopeTag;
+
+          if (!foundScopeTag) {
+            return true;
+          }
+
+          return found.scopeTag === foundScopeTag;
+        });
+      }
+    }
+
+    // logCocInfo('External Files:', externalFiles);
     api.configurePlugin('@monodon/typescript-nx-imports-plugin', {
       externalFiles,
     });
@@ -93,7 +180,7 @@ async function configurePlugin(workspaceRoot, api) {
 async function getExternalFiles(workspaceRoot) {
   let tsconfig = (await readAndCacheJsonFile(TSCONFIG_BASE, workspaceRoot)).json;
 
-  logCocInfo('getExternalFiles tsconfig', tsconfig);
+  // logCocInfo('getExternalFiles tsconfig', tsconfig);
 
   if (!('compilerOptions' in tsconfig)) {
     tsconfig = (await readAndCacheJsonFile('tsconfig.json', workspaceRoot)).json;
@@ -178,7 +265,7 @@ const fileContents = {};
 async function readAndParseJson(filePath) {
   const content = await readFile(filePath, { encoding: 'utf-8' });
 
-  logCocInfo(`readAndParseJson. content for filePath: ${filePath}`, content);
+  // logCocInfo(`readAndParseJson. content for filePath: ${filePath}`, content);
   try {
     return JSON.parse(content);
   } catch {
@@ -207,7 +294,7 @@ function clearJsonCache(filePath, basedir = '') {
 }
 
 async function readAndCacheJsonFile(filePath, basedir = '') {
-  logCocInfo('readAndCacheJsonFile filePath', filePath);
+  // logCocInfo('readAndCacheJsonFile filePath', filePath);
 
   if (!filePath) {
     logCocInfo('readAndCacheJsonFile no filePath', filePath);
@@ -218,20 +305,20 @@ async function readAndCacheJsonFile(filePath, basedir = '') {
   }
   let fullFilePath = path.join(basedir, filePath);
 
-  logCocInfo('readAndCacheJsonFile fullFilePath', fullFilePath);
+  // logCocInfo('readAndCacheJsonFile fullFilePath', fullFilePath);
 
   if (fullFilePath.startsWith('file:\\')) {
     fullFilePath = fullFilePath.replace('file:\\', '');
   }
   try {
-    logCocInfo('readAndCacheJsonFile trying');
+    // logCocInfo('readAndCacheJsonFile trying');
     const stats = await stat(fullFilePath);
 
-    logCocInfo('readAndCacheJsonFile stats', stats);
+    // logCocInfo('readAndCacheJsonFile stats', stats);
     if (fileContents[fullFilePath] || stats.isFile()) {
       fileContents[fullFilePath] ||= await readAndParseJson(fullFilePath);
 
-      logCocInfo('readAndCacheJsonFile fileContents[fullFilePath]', fileContents[fullFilePath]);
+      // logCocInfo('readAndCacheJsonFile fileContents[fullFilePath]', fileContents[fullFilePath]);
       return {
         path: fullFilePath,
         json: fileContents[fullFilePath],
